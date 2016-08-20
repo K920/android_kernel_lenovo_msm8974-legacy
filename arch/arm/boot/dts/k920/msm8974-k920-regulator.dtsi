@@ -437,7 +437,7 @@
 	rpm-regulator-vsa1 {
 		status = "okay";
 		pm8941_lvs1: regulator-lvs1 {
-		    regulator-always-on;
+			regulator-always-on;
 			status = "okay";
 		};
 	};
@@ -534,13 +534,6 @@
 			qcom,ldo-delta-voltage = <50000>;
 			qcom,cpu-num = <3>;
 		};
-	};
-
-	spi_eth_vreg: spi_eth_phy_vreg {
-		compatible = "regulator-fixed";
-		regulator-name = "ethernet_phy";
-		/*gpio = <&pm8941_mpps 5 0>;*/
-		enable-active-high;
 	};
 
 	/*
