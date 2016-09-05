@@ -3,13 +3,7 @@
 extern int is_show_lcd_param;
 extern void show_lcd_param(struct dsi_cmd_desc *cmds, int cmd_cnt);
 
-#define TAG "[LCD_EFFECT: ]"
-//#define LCDDEBUG
-#ifdef LCDDEBUG
-#define lcd_effect_info(fmt, ...) printk(TAG fmt, ##__VA_ARGS__);
-#else
-#define lcd_effect_info(fmt, ...) do {} while (0)
-#endif
+#define TAG "@@@@ lcd_effect: "
 
 static int is_custom_mode(struct lcd_mode_data *mode_data)
 {
@@ -122,7 +116,7 @@ static int get_mode_max_cnt(struct lcd_mode_data *mode_data)
 	for (i = 0; i < mode_data->supported_mode; i++) {
 		temp = mode_data->mode[i].mode_cmd.cnt;
 		cnt = (cnt > temp) ? cnt : temp;
-		lcd_effect_info("%s cnt = %d temp = %d\n", __func__, cnt, temp);
+		printk(TAG "%s: cnt=%d temp=%d\n", __func__, cnt, temp);
 	}
 
 	return cnt;
@@ -137,7 +131,7 @@ static int get_effect_max_cnt(struct lcd_effect_data *effect_data)
 	for (i = 0; i < effect_data->supported_effect; i++) {
 		temp = effect_data->effect[i].effect_cmd_data.cnt;
 		cnt = cnt + temp;
-		lcd_effect_info("%s cnt = %d temp = %d\n", __func__, cnt, temp);
+		printk(TAG "%s: cnt=%d temp=%d\n", __func__, cnt, temp);
 	}
 
 	return cnt;
@@ -149,7 +143,7 @@ static int get_init_code_max_cnt(struct panel_effect_data *panel_data, struct lc
 
 	cnt += get_mode_max_cnt(panel_data->mode_data);
 	cnt += get_effect_max_cnt(panel_data->effect_data);
-	lcd_effect_info("%s cnt: %d\n", __func__, cnt);
+	printk(TAG "%s: cnt=%d\n", __func__, cnt);
 	return cnt;
 }
 
@@ -195,7 +189,9 @@ static struct dsi_cmd_desc *copy_init_code(struct panel_effect_data *panel_data,
 
 	memcpy(panel_data->buf, panel_data->save_cmd.cmd, (init_cnt - CMDS_LAST_CNT) * sizeof (struct dsi_cmd_desc));
 	*cnt += (init_cnt - CMDS_LAST_CNT);
-    lcd_effect_info("%s: line=%d\n", __func__,__LINE__);
+
+	printk(TAG "%s: line=%d\n", __func__, __LINE__);
+
 	return (panel_data->buf + (init_cnt - CMDS_LAST_CNT));
 }
 
@@ -206,7 +202,9 @@ static struct dsi_cmd_desc *copy_sleep_out_code(
 {
 	memcpy(buf, panel_data->save_cmd.cmd + panel_data->save_cmd.cnt - CMDS_LAST_CNT, CMDS_LAST_CNT * sizeof (struct dsi_cmd_desc));
 	*cnt += CMDS_LAST_CNT;
-    lcd_effect_info("%s: line=%d\n", __func__,__LINE__);
+
+	printk(TAG "%s: line=%d\n", __func__, __LINE__);
+
 	return (buf + CMDS_LAST_CNT);
 }
 static struct dsi_cmd_desc *copy_head_code(struct panel_effect_data *panel_data, struct dsi_cmd_desc *buf, int *cnt)
@@ -258,7 +256,9 @@ static struct dsi_cmd_desc *copy_all_effect_code(struct panel_effect_data *panel
 		update_effect_cmds(&effect[i], effect[i].level);
 		cmd_cnt = get_effect_cmd_cnt(&effect[i]);
 		effect_cmd = get_effect_cmd(&effect[i]);
-		lcd_effect_info("%s name: [%s] level: [%d]\n", __func__, effect[i].name, effect[i].level);
+
+		printk(TAG "%s: name: [%s] level: [%d]\n", __func__, effect[i].name, effect[i].level);
+
 		*cnt += cmd_cnt;
 		for (j = 0; j < cmd_cnt; j++)
 			memcpy(temp++, get_effect_cmd_desc(&effect_cmd[j]), sizeof (struct dsi_cmd_desc));
@@ -277,13 +277,15 @@ static struct dsi_cmd_desc * copy_mode_code(
 	struct dsi_cmd_desc *temp;
 	int count = 0;
 	int mode_cnt = get_mode_cmd_cnt(mode);
-    lcd_effect_info("%s: line=%d mode_cnt=%d\n", __func__,__LINE__,mode_cnt);
+
+	printk(TAG "%s: line=%d mode_cnt=%d\n", __func__, __LINE__, mode_cnt);
+
 	if (mode_index == 0) {
-		lcd_effect_info("%s: current is custom mode\n", __func__);
+		printk(TAG "%s: current is custom mode\n", __func__);
 		temp = copy_all_effect_code(panel_data, buf, &count);
 		*cnt += count;
 	} else {
-		lcd_effect_info("%s: current is %s\n", __func__, mode->name);
+		printk(TAG "%s: current is %s\n", __func__, mode->name);
 		memcpy(buf, mode_cmds->cmd, mode_cnt * sizeof (struct dsi_cmd_desc));
 		temp = buf + mode_cnt;
 		*cnt += mode_cnt;
@@ -291,6 +293,7 @@ static struct dsi_cmd_desc * copy_mode_code(
 
 	return temp;
 }
+
 static int lcd_get_bl_outdoor(struct msm_fb_data_type *mfd)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
@@ -323,10 +326,10 @@ static int bl_set_level(int gpio, int level)
 {
 	if (gpio_is_valid(gpio)) {
 		gpio_set_value(gpio, level);
-		lcd_effect_info("%s %s success\n", __func__, level ? "on" : "off");
+		printk(TAG "%s: %s success\n", __func__, level ? "on" : "off");
 		return 0;
 	} else {
-		lcd_effect_info("%s %s gpio: [%d] invalid\n", __func__, level ? "on" : "off", gpio);
+		printk(TAG "%s: gpio %d invalid level=%s\n", __func__, gpio, level ? "on" : "off");
 		return -EINVAL;
 	}
 }
@@ -365,7 +368,7 @@ static int set_mode(struct msm_fb_data_type *mfd, struct panel_effect_data *pane
 
 	lcd_cmd.cmd = panel_data->buf;
 
-    lcd_effect_info("%s: line=%d\n", __func__,__LINE__);
+	printk(TAG "%s: line=%d\n", __func__, __LINE__);
 	temp = copy_head_code(panel_data, panel_data->buf, &cnt);
 	copy_mode_code(panel_data, temp, index, &cnt);
 
@@ -374,7 +377,7 @@ static int set_mode(struct msm_fb_data_type *mfd, struct panel_effect_data *pane
 	ret = send_lcd_cmds(mfd, &lcd_cmd);
 	if (!ret || ret == -EPERM) {
 		panel_data->mode_data->current_mode = index;
-		lcd_effect_info("%s %s success\n", __func__, panel_data->mode_data->mode[index].name);
+		printk(TAG "%s: %s success\n", __func__, panel_data->mode_data->mode[index].name);
 		lcd_set_bl_outdoor(mfd, panel_data->mode_data->mode[index].bl_ctrl);
 		ret = 0;
 	}
@@ -401,7 +404,7 @@ static int set_effect(struct msm_fb_data_type *mfd, struct panel_effect_data *pa
 	ret = send_lcd_cmds(mfd, &lcd_cmd);
 	if (!ret || ret == -EPERM) {
 		panel_data->effect_data->effect[index].level = level;
-		lcd_effect_info("%s name: [%s] level: [%d] success\n", __func__, panel_data->effect_data->effect[index].name, level);
+		printk(TAG "%s: name: [%s] level: [%d] success\n", __func__, panel_data->effect_data->effect[index].name, level);
 		ret = 0;
 	}
 	if (is_show_lcd_param)
@@ -415,28 +418,28 @@ static int lcd_get_mode(struct lcd_mode_data *mode_data)
 	if (mode_data == NULL)
 		return -EINVAL;
 
-	lcd_effect_info("%s name: [%s] index: [%d]\n", __func__, mode_data->mode[mode_data->current_mode].name, mode_data->current_mode);
+	printk(TAG "%s: name: [%s] index: [%d]\n", __func__, mode_data->mode[mode_data->current_mode].name, mode_data->current_mode);
 	return mode_data->current_mode;
 }
 
 static int lcd_get_supported_effect_level(struct lcd_effect_data *effect_data, int index)
 {
 	if (effect_data == NULL || index < 0) {
-		lcd_effect_info("%s index: %d invalid, max index is: 0 - %d\n", __func__, index, effect_data->supported_effect - 1);
+		printk(TAG "%s: index: %d invalid, max index is: 0 - %d\n", __func__, index, effect_data->supported_effect - 1);
 		return -EINVAL;
 	}
 
-	lcd_effect_info("%s name: [%s] index: [%d] max_level: [%d]\n", __func__, effect_data->effect[index].name, index, effect_data->effect[index].max_level);
+	printk(TAG "%s: name: [%s] index: [%d] max_level: [%d]\n", __func__, effect_data->effect[index].name, index, effect_data->effect[index].max_level);
 	return effect_data->effect[index].max_level;
 }
 static int lcd_get_effect_level(struct lcd_effect_data *effect_data, int index)
 {
 	if (effect_data == NULL || index < 0) {
-		lcd_effect_info("%s index: %d invalid, max index is: 0 - %d\n", __func__, index, effect_data->supported_effect - 1);
+		printk(TAG "%s: index: %d invalid, max index is: 0 - %d\n", __func__, index, effect_data->supported_effect - 1);
 		return -EINVAL;
 	}
 
-	lcd_effect_info("%s name: [%s] index: [%d] level: [%d]\n", __func__, effect_data->effect[index].name, index, effect_data->effect[index].level);
+	printk(TAG "%s: name: [%s] index: [%d] level: [%d]\n", __func__, effect_data->effect[index].name, index, effect_data->effect[index].level);
 	return effect_data->effect[index].level;
 }
 
@@ -482,7 +485,7 @@ static int lcd_set_mode(struct msm_fb_data_type *mfd, struct panel_effect_data *
 	struct lcd_mode_data *mode_data = panel_data->mode_data;
 
 	if (mode >= mode_data->supported_mode || mode < 0) {
-		lcd_effect_info("%s mode invalid, max mode is: 0 - %d\n", __func__, mode_data->supported_mode - 1);
+		printk(TAG "%s: mode invalid, max mode is: 0 - %d\n", __func__, mode_data->supported_mode - 1);
 		return -EINVAL;
 	}
 
@@ -497,12 +500,12 @@ static int lcd_set_effect(struct msm_fb_data_type *mfd, struct panel_effect_data
 	struct lcd_effect_data *effect_data = panel_data->effect_data;
 
 	if (index >= effect_data->supported_effect || index < 0) {
-		lcd_effect_info("%s index invalid, max index is: 0 - %d\n", __func__, effect_data->supported_effect - 1);
+		printk(TAG "%s: index invalid, max index is: 0 - %d\n", __func__, effect_data->supported_effect - 1);
 		return -EINVAL;
 	}
 
 	if (level >= effect_data->effect[index].max_level || level < 0) {
-		lcd_effect_info("%s level invalid, max level is: 0 - %d\n", __func__, effect_data->effect[index].max_level - 1);
+		printk(TAG "%s: level invalid, max level is: 0 - %d\n", __func__, effect_data->effect[index].max_level - 1);
 		return -EINVAL;
 	}
 
@@ -525,7 +528,7 @@ int update_init_code(
 
 	lcd_cmd.cmd = panel_data->buf;
 
-    lcd_effect_info("%s: line=%d\n", __func__,__LINE__);
+	printk(TAG "%s: line=%d\n", __func__, __LINE__);
 	temp = copy_init_code(panel_data, &cnt);
 	temp = copy_mode_code(panel_data, temp, mode_index, &cnt);
 	temp = copy_sleep_out_code(panel_data, temp, &cnt);
@@ -534,7 +537,7 @@ int update_init_code(
 
 	ctrl_pdata->on_cmds.cmds = lcd_cmd.cmd;
 	ctrl_pdata->on_cmds.cmd_cnt = lcd_cmd.cnt;
-	lcd_effect_info("%s Use system param\n", __func__);
+	printk(TAG "%s Use system param\n", __func__);
 
 	mdss_dsi_panel_cmds_send(ctrl_pdata, &ctrl_pdata->on_cmds);
 	if (is_show_lcd_param)
@@ -599,7 +602,7 @@ int handle_lcd_effect_data(
 				ret = lcd_set_effect(mfd, panel_data, ctrl_data->index, ctrl_data->level);
 			} else {
                 mode_index = mode_index;
-				lcd_effect_info("(%s) can't support change effect\n", mode_data->mode[mode_index].name);
+				printk(TAG "%s: [%s] can't support change effect\n", __func__, mode_data->mode[mode_index].name);
 				ret = -EINVAL;
 			}
 			break;
