@@ -11,144 +11,6 @@ extern void show_lcd_param(struct dsi_cmd_desc *cmds, int cmd_cnt);
 #define lcd_effect_info(fmt, ...) do {} while (0)
 #endif
 
-#ifdef READ_LCD_PARAM
-static int read_lcd_file = 0;
-struct lcd_cmds lcd_txt_cmds;
-
-#define BUFSIZE 3
-#define LENGHT 256
-#define LENGHT_POS	0
-#define TYPE_POS	1
-#define DELAY_POS	2
-#define DATA_POS	3
-#define FILEPATH	"/data/lcd.txt"
-static char data_buf[LENGHT] = {0};
-static char *data_pos[LENGHT];
-
-static int get_data(char *buf)
-{
-	char a, b;
-
-	if (buf[0] >= 'A' && buf[0] <= 'F') {
-		a = buf[0] - 55;
-	} else if (buf[0] >= 'a' && buf[0] <= 'f') {
-		a = buf[0] - 87;
-	} else {
-		a = buf[0] - 48;
-	}
-	if (buf[1] >= 'A' && buf[1] <= 'F') {
-		b = buf[1] - 55;
-	} else if (buf[1] >= 'a' && buf[1] <= 'f') {
-		b = buf[1] - 87;
-	} else {
-		b = buf[1] - 48;
-	}
-	return a * 16 + b;
-}
-static void clear_data_and_mem(void)
-{
-	int i;
-
-	if (lcd_txt_cmds.cnt) {
-		pr_info("Free mem for lcd txt file's cmds buf.\n");
-		for (i = 0; i < lcd_txt_cmds.cnt; i++) {
-			if (data_pos[i])
-				kfree(data_pos[i]);
-		}
-		if (lcd_txt_cmds.cmd)
-			kfree(lcd_txt_cmds.cmd);
-		lcd_txt_cmds.cnt = 0;
-	}
-}
-static int open_lcd_and_get_data(void)
-{
-	struct file *fp;
-	int ret, lenght = 0;
-	int i = 0, j = 0;
-	char buf[BUFSIZE] = {0};
-	char *filepath = FILEPATH;
-	mm_segment_t old_fs;
-
-	lcd_txt_cmds.cnt = 0;
-	//清空BUF
-	for (i = 0; i < LENGHT; i++) {
-		data_buf[i] = 0;
-	}
-	fp = filp_open(filepath, O_RDONLY, 0);
-	if (IS_ERR(fp)) {
-		pr_info("open file failure\n");
-		return -1;
-	} else {
-		pr_info("open file success, begin to read\n");
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);	
-		do {
-			ret = vfs_read(fp, buf, BUFSIZE, &fp->f_pos);
-			if (ret == -1) {
-				pr_info("read file failure\n");
-				goto read_err;
-			}
-			if (ret == BUFSIZE) {
-				lenght++;
-				//buf里留一个位置给lenght
-				data_buf[lenght] = get_data(buf); //数据格式为:长度＋格式 + 延时＋数据,现在长度data_buf[0]为空
-
-				if (buf[2] == '\n') { //标记一行结束
-					if (lenght > LENGHT) { //如果一行的数据超过buf的大小
-						pr_info("data too long !!!!!!!!!!!!!!!\n");
-						goto large_err;
-					}
-
-					//把data_buf[0]赋值为长度
-					data_buf[LENGHT_POS] = lenght + 1;
-					data_pos[lcd_txt_cmds.cnt] = kmalloc(sizeof(char) * data_buf[LENGHT_POS], GFP_KERNEL);
-					if (!data_pos[lcd_txt_cmds.cnt]) {
-						pr_info("kmalloc failure !!!!\n");
-						goto mem_err;
-					}
-
-					memcpy(data_pos[lcd_txt_cmds.cnt], data_buf, data_buf[0]); //把数据拷贝到新分配的空间
-
-					//pr_info("buf[%d] lenght = %d\n", lcd_txt_cmds.cnt, lenght);
-					lcd_txt_cmds.cnt++; //数据的行号＋1
-					lenght = 0;
-				} 
-			}
-		} while (ret != 0);
-		j = 0;
-
-		lcd_txt_cmds.cmd = kmalloc(sizeof(struct dsi_cmd_desc) * lcd_txt_cmds.cnt, GFP_KERNEL);
-		if (!lcd_txt_cmds.cmd) {
-			pr_info("kmalloc failure !!!!\n");
-			goto cmds_err;
-		}
-
-		for (i = 0; i < lcd_txt_cmds.cnt; i++) {
-			lcd_txt_cmds.cmd[i].dchdr.dtype = data_pos[i][TYPE_POS];
-			lcd_txt_cmds.cmd[i].dchdr.last = 1;
-			lcd_txt_cmds.cmd[i].dchdr.vc = 0;
-			lcd_txt_cmds.cmd[i].dchdr.ack = 0;
-			lcd_txt_cmds.cmd[i].dchdr.wait = data_pos[i][DELAY_POS];
-			lcd_txt_cmds.cmd[i].dchdr.dlen = data_pos[i][LENGHT_POS] - DATA_POS;
-			lcd_txt_cmds.cmd[i].payload = &data_pos[i][DATA_POS];
-		}
-
-		filp_close(fp, NULL);
-	}
-	return 0;
-cmds_err:
-large_err:
-read_err:
-mem_err:
-	for (i = 0; i < lcd_txt_cmds.cnt; i++) {
-		kfree(data_pos[i]);
-	}
-	lcd_txt_cmds.cnt = 0;
-	return -1;
-}
-
-
-#endif
 static int is_custom_mode(struct lcd_mode_data *mode_data)
 {
 	return !mode_data->current_mode;
@@ -670,21 +532,9 @@ int update_init_code(
 
 	lcd_cmd.cnt = cnt;
 
-#ifdef READ_LCD_PARAM
-	if (read_lcd_file) 
-	{
-		if (!open_lcd_and_get_data()) {
-			ctrl_pdata->on_cmds.cmds = lcd_txt_cmds.cmd;
-			ctrl_pdata->on_cmds.cmd_cnt = lcd_txt_cmds.cnt;
-			lcd_effect_info("%s Use Txt file param\n", __func__);
-		}
-	} else 
-#endif
-	{
-		ctrl_pdata->on_cmds.cmds = lcd_cmd.cmd;
-		ctrl_pdata->on_cmds.cmd_cnt = lcd_cmd.cnt;
-		lcd_effect_info("%s Use system param\n", __func__);
-	}
+	ctrl_pdata->on_cmds.cmds = lcd_cmd.cmd;
+	ctrl_pdata->on_cmds.cmd_cnt = lcd_cmd.cnt;
+	lcd_effect_info("%s Use system param\n", __func__);
 
 	mdss_dsi_panel_cmds_send(ctrl_pdata, &ctrl_pdata->on_cmds);
 	if (is_show_lcd_param)
@@ -692,9 +542,7 @@ int update_init_code(
 
 	ctrl_pdata->on_cmds.cmds = save_cmd->cmd;
 	ctrl_pdata->on_cmds.cmd_cnt = save_cmd->cnt;
-#ifdef READ_LCD_PARAM
-	clear_data_and_mem();
-#endif
+
 	bl_set_level(ctrl_pdata->bl_outdoor_gpio, panel_data->mode_data->mode[mode_index].bl_ctrl);
 	return ret;
 }
@@ -784,30 +632,7 @@ int malloc_lcd_effect_code_buf(struct panel_effect_data *panel_data)
 	}
 	return 0;
 }
-#ifdef READ_LCD_PARAM
-static int get_lcd_param_func(const char *val, struct kernel_param *kp)
-{
-	int value;
-	int ret = param_set_int(val, kp); 
 
-	if(ret < 0) 
-	{    
-		pr_info(KERN_ERR"%s Invalid argument\n", __func__);
-		return -EINVAL;
-	}    
-	value = *((int*)kp->arg);
-	if (value) {
-		read_lcd_file = 1;
-		pr_info("prepare to read lcd param...\n");
-	} else {
-		read_lcd_file = 0;
-		pr_info("show lcd param off...\n");
-	}
-	return 0;
-}
-
-module_param_call(read_txt_file, get_lcd_param_func, param_get_int, &read_lcd_file, S_IRUSR | S_IWUSR);
-#endif
 static int show_lcd_param_func(const char *val, struct kernel_param *kp)
 {
 	int value;
