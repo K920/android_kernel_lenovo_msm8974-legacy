@@ -60,9 +60,11 @@ MR_KEXEC_MEM_MIN = 0x85000000.
 MR_KEXEC_MEM_MIN := 0x03000000
 */
 
+#elif defined(CONFIG_MACH_LENOVO_K920)
+#define KEXEC_HB_PAGE_ADDR		UL(0x05800000) // 0x059fffff - ram_console
+#define KEXEC_HB_KERNEL_LOC		UL(0x3208000)
 #else
 #error "Adress for kexec hardboot page not defined"
-
 #endif
 #endif
 
