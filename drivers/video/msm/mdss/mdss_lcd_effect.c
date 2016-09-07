@@ -158,7 +158,7 @@ static int mdss_lcd_effect_set_bl_gpio(struct msm_fb_data_type *mfd, int level)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_panel_data *pdata;
-	
+
 	pdata = dev_get_platdata(&mfd->pdev->dev);
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata, panel_data);
 
@@ -336,7 +336,7 @@ static ssize_t mdss_lcd_effect_sysfs_get_effect(struct device *dev, struct devic
 		ret += snprintf(buf + ret, PAGE_SIZE, "%d %s %d/%d\n", i,
 					effect_data->effect[i].name,
 					effect_data->effect[i].level,
-					effect_data->effect[i].max_level);
+					effect_data->effect[i].max_level - 1);
 	}
 
 	return ret;
@@ -355,8 +355,14 @@ static ssize_t mdss_lcd_effect_sysfs_set_effect(struct device *dev, struct devic
 	if (kstrtoint(tmp_index, 0, &index) || kstrtoint(tmp_level, 0, &level))
 		return -EINVAL;
 
-	if (index < 0 || index > mdss_lcd_effect_data.effect_data->supported_effect) {
-		pr_err("%s: Trying to set unsupported effect, index=%d!\n", TAG, index);
+	if (index < 0 || index >= mdss_lcd_effect_data.effect_data->supported_effect) {
+		pr_err("%s: %s: Trying to set unsupported effect, index=%d!\n", TAG, __func__, index);
+		return -EINVAL;
+	}
+
+	if (level < 0 || level >= mdss_lcd_effect_data.effect_data->effect[index].max_level) {
+		pr_err("%s: %s: Trying to set invalid level for [%s], level=%d!\n",
+				TAG, __func__, mdss_lcd_effect_data.effect_data->effect[index].name, level);
 		return -EINVAL;
 	}
 
@@ -396,8 +402,9 @@ static ssize_t mdss_lcd_effect_sysfs_set_mode(struct device *dev, struct device_
 	if (kstrtoul(buf, 0, &index))
 		return -EINVAL;
 
-	if (index < 0 || index > mdss_lcd_effect_data.mode_data->supported_mode) {
-		pr_err("%s: Trying to set unsupported lcd mode, index=%lu!\n", TAG, index);
+	if (index < 0 || index >= mdss_lcd_effect_data.mode_data->supported_mode) {
+		pr_err("%s: %s: Trying to set unsupported lcd mode, index=%lu!\n",
+				TAG, __func__, index);
 		return -EINVAL;
 	}
 
