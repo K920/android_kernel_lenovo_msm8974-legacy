@@ -248,7 +248,7 @@ static int mdss_lcd_effect_set_mode(
 		int index)
 {
 	struct mdss_lcd_effect_mode_data *mode_data = lcd_data->mode_data;
-	int ret, cnt = 0;
+	int ret, previous_mode, cnt = 0;
 
 	if (index < 0 || index >= mode_data->supported_mode) {
 		pr_err("%s: %s: mode [%d] is invalid, available range is 0-%d!\n",
@@ -256,12 +256,14 @@ static int mdss_lcd_effect_set_mode(
 		return -EINVAL;
 	}
 
+	previous_mode = mode_data->current_mode;
+	mode_data->current_mode = index;
+
 	mdss_lcd_effect_copy_head_code(lcd_data, /*out*/&cnt);
 	mdss_lcd_effect_copy_mode_code(lcd_data, index, /*out*/&cnt);
 
 	ret = mdss_lcd_effect_send_cmds(mfd, lcd_data, cnt);
 	if (!ret || ret == -EPERM) {
-		mode_data->current_mode = index;
 		pr_info("%s: %s: name [%s] index [%d] success\n",
 				TAG, __func__, mode_data->mode[index].name, index);
 
@@ -270,6 +272,8 @@ static int mdss_lcd_effect_set_mode(
 
 		ret = 0;
 	} else {
+		mode_data->current_mode = previous_mode;
+
 		pr_err("%s: %s: Failed to set LCD Mode index [%d], ret=%d!\n",
 				TAG, __func__, index, ret);
 	}
